@@ -346,6 +346,38 @@ class Functions(metaclass=FunctionRegistry):
         else:
             return None
 
+    @signature({'types': ['array']}, {'types': ['expref']})
+    def _func_group_by(self, array, expref):
+        # Groups array elements into an object keyed by the value the
+        # expref resolves to for each element.  Keys are stringified
+        # per JSON object key rules; both group order and the order of
+        # elements within each group follow the input order.
+        result = {}
+        for element in array:
+            key = expref.visit(expref.expression, element)
+            key = self._stringify_group_key(key)
+            if key in result:
+                result[key].append(element)
+            else:
+                result[key] = [element]
+        return result
+
+    def _stringify_group_key(self, key):
+        # bool must be checked before int (bool is a subclass of int).
+        if isinstance(key, bool):
+            return 'true' if key else 'false'
+        elif isinstance(key, STRING_TYPE):
+            return key
+        elif isinstance(key, (int, float)):
+            return str(key)
+        elif key is None:
+            return 'null'
+        else:
+            raise exceptions.JMESPathTypeError(
+                'group_by', key,
+                self._convert_to_jmespath_type(type(key).__name__),
+                ['string', 'number', 'boolean', 'null'])
+
     def _create_key_func(self, expref, allowed_types, function_name):
         def keyfunc(x):
             result = expref.visit(expref.expression, x)
